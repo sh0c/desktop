@@ -21,6 +21,7 @@ import {
   LineEndingsChange,
   parseLineEndingText,
   ILargeTextDiff,
+  ILFSImageDiff,
 } from '../../models/diff'
 
 import { spawnAndComplete } from './spawn'
@@ -487,7 +488,7 @@ async function getLFSImageDiff(
   repository: Repository,
   file: FileChange,
   hunk: DiffHunk
-): Promise<IImageDiff> {
+): Promise<ILFSImageDiff> {
   let prev: string = ''
   let curr: string = ''
 
@@ -510,14 +511,18 @@ async function getLFSImageDiff(
   }
 
   return {
-    kind: DiffType.Image,
+    kind: DiffType.LFSImage,
     previous:
       prev.length > 0
-        ? await getLFSBlobImage(repository, getOldPathOrDefault(file), prev)
+        ? () => {
+            return getLFSBlobImage(repository, getOldPathOrDefault(file), prev)
+          }
         : undefined,
     current:
       curr.length > 0
-        ? await getLFSBlobImage(repository, getOldPathOrDefault(file), curr)
+        ? () => {
+            return getLFSBlobImage(repository, getOldPathOrDefault(file), curr)
+          }
         : undefined,
   }
 }
