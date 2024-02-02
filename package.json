@@ -70,6 +70,8 @@
     "chalk": "^5.3.0",
     "cross-env": "^7.0.3",
     "css-loader": "^7.1.2",
+    "ajv": "^6.12.3",
+    "dds-ktx-parser": "^1.0.1",
     "eslint": "^8.55.0",
     "eslint-config-prettier": "^6.11.0",
     "eslint-plugin-jsdoc": "^43.0.1",
