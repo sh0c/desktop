@@ -37,6 +37,7 @@ import { getMergeBase } from './merge'
 import { IStatusEntry } from '../status-parser'
 import { createLogParser } from './git-delimiter-parser'
 import { enableImagePreviewsForDDSFiles } from '../feature-flag'
+import { isPSDExtension, getPSDPreview } from '../psd-preview'
 import { unstageAll } from './reset'
 import { stageFiles } from './update-index'
 import { isAbsolute } from 'path'
@@ -143,6 +144,8 @@ const imageFileExtensions = new Set([
   '.webp',
   '.bmp',
   '.avif',
+  '.psd',
+  '.psb',
 ])
 
 if (enableImagePreviewsForDDSFiles()) {
@@ -807,14 +810,8 @@ export async function getBlobImage(
   path: string,
   commitish: string
 ): Promise<Image> {
-  const extension = Path.extname(path)
   const contents = await getBlobContents(repository, commitish, path)
-  return new Image(
-    contents.buffer,
-    contents.toString('base64'),
-    getMediaType(extension),
-    contents.length
-  )
+  return bufferToImage(contents, path)
 }
 /**
  * Retrieve the binary contents of a blob from the working directory
@@ -830,11 +827,33 @@ export async function getWorkingDirectoryImage(
   file: FileChange
 ): Promise<Image> {
   const contents = await readFile(Path.join(repository.path, file.path))
+  return bufferToImage(contents, file.path)
+}
+
+/**
+ * Convert a raw file buffer into an Image. For PSD/PSB files the composite
+ * preview is extracted first; all other formats are passed through directly.
+ */
+function bufferToImage(buf: Buffer, filePath: string): Image {
+  if (isPSDExtension(filePath)) {
+    try {
+      const preview = getPSDPreview(buf)
+      return new Image(
+        preview.data.buffer,
+        preview.data.toString('base64'),
+        preview.mediaType,
+        preview.data.length
+      )
+    } catch {
+      // fall through to raw representation
+    }
+  }
+  const extension = Path.extname(filePath)
   return new Image(
-    contents.buffer,
-    contents.toString('base64'),
-    getMediaType(Path.extname(file.path)),
-    contents.length
+    buf.buffer,
+    buf.toString('base64'),
+    getMediaType(extension),
+    buf.length
   )
 }
 
@@ -943,13 +962,7 @@ async function getLFSBlobImage(
   if (!buf || buf.length === 0) {
     return undefined
   }
-  const extension = Path.extname(path)
-  return new Image(
-    buf.buffer,
-    buf.toString('base64'),
-    getMediaType(extension),
-    buf.length
-  )
+  return bufferToImage(buf, path)
 }
 
 /**
@@ -967,13 +980,7 @@ async function getLFSImageDiff(
   if (file.status.kind !== AppFileStatusKind.Deleted) {
     if (file instanceof WorkingDirectoryFileChange) {
       const contents = await readFile(Path.join(repository.path, file.path))
-      const ext = Path.extname(file.path)
-      current = new Image(
-        contents.buffer,
-        contents.toString('base64'),
-        getMediaType(ext),
-        contents.length
-      )
+      current = bufferToImage(contents, file.path)
     } else {
       current = await getLFSBlobImage(repository, file.path, newestCommitish)
     }
